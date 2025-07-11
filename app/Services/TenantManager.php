@@ -9,7 +9,7 @@ class TenantManager
      */
     public function __construct()
     {
-        //
+        
     }
     
     protected ?int $currentTenantId = null;
