@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Services\AuthService;
+use App\Http\Resources\UserResource;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
@@ -18,8 +19,18 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         try {
-            $data = $request->only('tenant_id', 'name', 'role' , 'email', 'password', 'password_confirmation');
-            return $this->authService->register($data);
+            // Validation is now for the tenant and the owner user.
+                $validator = Validator::make($request->toArray(), [
+                    'tenant_name' => 'required|string|max:255',
+                    'user_name' => 'required|string|max:255',
+                    'email' => 'required|string|email|max:255|unique:users,email',
+                    'password' => 'required|string|min:8|confirmed',
+                ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+            return $this->authService->register($validator->validated());
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 400);
         }
@@ -60,6 +71,9 @@ class AuthController extends Controller
 
     public function me()
     {
-        return response()->json(auth()->user());
+         $user = auth()->user();
+         $user->load('tenant');
+        // Return the user data formatted by our API Resource
+        return new UserResource($user);
     }
 }

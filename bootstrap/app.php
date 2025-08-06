@@ -16,7 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant.check' => EnsureUserBelongsToTenant::class,
         ]);
+        $middleware->api(prepend: [
+        \Illuminate\Http\Middleware\HandleCors::class, // <-- THIS IS THE BUILT-IN ONE
+    ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        
     })->create();

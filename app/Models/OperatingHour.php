@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class OperatingHour extends Model
 {
-    protected $fillable = ['bookable_service_id', 'day_of_week', 'open_time', 'close_time'];
+    protected $fillable = ['tenant_id','bookable_service_id', 'day_of_week', 'open_time', 'close_time'];
 
     public function bookableService(): BelongsTo
     {

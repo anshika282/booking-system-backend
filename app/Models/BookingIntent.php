@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 class BookingIntent extends Model
 {
     protected $fillable = ['session_id', 'tenant_id', 'bookable_service_id', 'customer_id', 'intent_data', 'subtotal_amount', 'discounts_amount', 'surcharges_amount', 'addons_amount', 'total_amount', 'last_step_completed', 'status', 'expires_at'];
+    protected $casts = [
+        'intent_data' => 'array',
+        'expires_at' => 'datetime',
+    ];
 
     public function tenant(): BelongsTo { 
         return $this->belongsTo(Tenant::class); 

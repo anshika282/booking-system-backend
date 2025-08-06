@@ -8,12 +8,29 @@ use Illuminate\Database\Eloquent\Model;
 
 class AddOn extends Model
 {
+    /**
+     * The table associated with the model.
+     *
+     * This explicitly tells Eloquent to use the 'addons' table
+     * instead of trying to guess 'add_ons'.
+     *
+     * @var string
+     */
+    protected $table = 'addons';
+    
     protected $fillable = [
         'tenant_id',
         'bookable_service_id',
         'name',
-        'base_price',
+        'type',
+        'is_included_in_ticket',
+        'price',
         'order_column',
+    ];
+
+    protected $casts = [
+        'price' => 'float',
+         'is_included_in_ticket' => 'boolean'
     ];
 
     public function bookableService(): BelongsTo
