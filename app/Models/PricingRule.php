@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Tenant;
 use App\Models\BookableService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PricingRule extends Model
 {
@@ -15,9 +16,23 @@ class PricingRule extends Model
         'type', 
         'conditions', 
         'price_modification', 
+        'category',      
+        'is_stackable',
         'priority', 
         'active'
     ];
+/**
+     * The attributes that should be cast to native types.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'conditions' => 'array',
+        'price_modification' => 'array',
+        'active' => 'boolean',
+        'is_stackable' => 'boolean', // <-- ADD THIS
+    ];
+
 
     public function bookableService(): BelongsTo
     {

@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\Tenant;
+use Illuminate\Support\Facades\DB;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -12,26 +14,29 @@ class AuthService
 {
     public function register($data)
     {
-        // Validate the request data
-        $validator = Validator::make($data, [
-            'tenant_id' => 'required|exists:tenants,id',
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
 
-        if ($validator->fails()) {
-            throw new \Exception($validator->errors()->first());
-        }
+        // This ensures both the Tenant and User are created, or neither is.
+        $user = DB::transaction(function () use ($data) {
+            // Step 1: Create the new Tenant.
+            // The 'creating' event on the Tenant model will automatically add a UUID.
+            $tenant = Tenant::create([
+                'name' => $data['tenant_name'],
+                // Domain could be an auto-generated slug or another field in the sign-up form.
+            ]);
+        
+            // Step 2: Create the new User and associate it with the new Tenant.
+            // This user is automatically designated as the 'owner'.
+            $user = User::create([
+                'tenant_id' => $tenant->id,
+                'tenant_uuid' => $tenant->uuid, 
+                'name' => $data['user_name'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'role' => 'owner', // Assign the 'owner' role
+            ]);
 
-        // Create the user in the database
-        $user = User::create([
-            'tenant_id' => $data['tenant_id'],
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role' => 'staff', // Default role can be staff, or you can make this configurable
-        ]);
+            return $user;
+        });
 
         // Generate JWT token for the user
         $token = JWTAuth::fromUser($user);
