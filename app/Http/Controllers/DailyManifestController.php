@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\BookableService;
 use App\Services\BookingPriceCalculator;
 use Illuminate\Http\JsonResponse;
+use App\Models\Tenant; 
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
@@ -59,7 +60,7 @@ class DailyManifestController extends Controller
      * [GET] /services/{service}/daily-manifest
      * Fetches available slots and dynamically priced tickets for a given day.
      */
-    public function show(Request $request, BookableService $service): JsonResponse
+    public function show(Request $request, Tenant $tenant, BookableService $service): JsonResponse
     {
         // Policy check is optional here since we are showing public data,
         // but good practice if services can be private.

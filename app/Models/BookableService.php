@@ -3,14 +3,17 @@
 namespace App\Models;
 
 use App\Models\AddOn;
+use App\Models\Coupon;
 use App\Models\Tenant;
 use App\Models\TicketTier;
 use App\Models\PricingRule;
 use App\Models\OperatingHour;
+use App\Models\AvailabilitySlot;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BookableService extends Model
 {
@@ -83,6 +86,12 @@ class BookableService extends Model
             // We need to query the child record including trashed ones to find it.
             $service->serviceable()->withTrashed()->restore();
         });
+
+         static::creating(function (BookableService $service) {
+                if (empty($service->uuid)) {
+                    $service->uuid = (string) Str::uuid();
+                }
+            });
     }
 }
 

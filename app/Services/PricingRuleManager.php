@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\BookableService;
 use App\Models\PricingRule;
+use App\Models\BookableService;
+use Illuminate\Support\Facades\DB;
 
 class PricingRuleManager
 {
@@ -33,15 +34,20 @@ class PricingRuleManager
      */
     public function updateRule(PricingRule $rule, array $data): PricingRule
     {
-        // The validated $data from the PATCH request contains only the keys the user wants to change.
-        // For standard columns (like 'name', 'priority'), this is fine.
-        // For JSON columns, if the key ('conditions' or 'price_modification') is present,
-        // we should treat it as the NEW, COMPLETE state for that object.
+        \Log::info('Updating pricing rule', ['rule_id' => $rule->id, 'data' => $data]);
+        // Handle JSON columns by merging, not replacing.
+        if (isset($data['conditions'])) {
+            // Read the existing conditions, merge the new data, and overwrite the key in the payload.
+            $data['conditions'] = array_merge($rule->conditions ?? [], $data['conditions']);
+        }
+
+        if (isset($data['price_modification'])) {
+            // Read the existing modification, merge the new data, and overwrite the key in the payload.
+            $data['price_modification'] = array_merge($rule->price_modification ?? [], $data['price_modification']);
+        }
         
-        // Eloquent's update() method already does this replacement behavior correctly.
-        // The previous merge logic was the source of the problem.
-        // By removing it, we fix the bug.
-        
+        // Now, the $data array contains all the original JSON data plus the incoming changes.
+        // It is now safe to perform a standard update.
         $rule->update($data);
 
         return $rule->fresh();

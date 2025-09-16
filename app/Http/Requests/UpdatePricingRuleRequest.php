@@ -26,12 +26,10 @@ class UpdatePricingRuleRequest extends FormRequest
 
         return [
             // --- Top-Level Fields ---
-            // 'sometimes' allows for partial updates. 'required' ensures if the key is present, it's not empty.
-            'name' => 'sometimes|required|string|max:255',
+            // 'sometimes' allows for partial updates. 'required' ensures if the key is present, it's not empty
             'type' => 'sometimes|required|string|max:255',
             'active' => 'sometimes|required|boolean',
             'priority' => 'sometimes|required|integer',
-            'category' => ['sometimes', 'required', 'string', Rule::in(['base_price_adjustment', 'discount'])],
             'is_stackable' => 'sometimes|required|boolean',
 
             // --- Conditions JSON ---

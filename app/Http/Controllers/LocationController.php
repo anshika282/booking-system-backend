@@ -42,10 +42,10 @@ class LocationController extends Controller
 
     public function destroy(Location $location): JsonResponse
     {
-        $this->authorize('delete', $location);
+        $this->authorize('delete',[ $$location]);
         // Optional: Check if location is in use before deleting
         if ($location->serviceTicketedEvents()->exists()) {
-        return response()->json(['error' => 'Cannot delete a location that is currently in use by a service.'], 422);
+            return response()->json(['error' => 'Cannot delete a location that is currently in use by a service.'], 422);
         }
         $location->delete();
         return response()->json(null, 204);

@@ -37,9 +37,12 @@ class BookingPriceCalculator
             // Phase 3: Apply Automatic Discounts from Pricing Rules
             $this->applyAutomaticDiscounts($breakdown, $activeRules, $bookingDate);
 
+            \Log::info("Applied automatic discounts:");
             // Phase 4: Apply Explicit Coupon Discount
             if (!empty($selections['coupon_code'])) {
+                \Log::info("Applying coupon code: {$selections['coupon_code']}");
                 $this->applyCouponDiscount($breakdown, $selections['coupon_code'], $bookingDate);
+                \Log::info("Applied coupon code: {$selections['coupon_code']}");
             }
         }
 
@@ -224,6 +227,7 @@ class BookingPriceCalculator
 
     private function calculateTotalAmountDiscount(float $subtotal, array $mod): float
     {
+        \Log::info('Calculating total amount discount', ['subtotal' => $subtotal, 'mod' => $mod]);
         if ($mod['calculation_mode'] === 'percentage') {
             // Use 'amount' key as per our final validation design
             return $subtotal * (($mod['amount'] ?? 0) / 100); 
@@ -326,22 +330,87 @@ class BookingPriceCalculator
         }
     }
 
-     private function applyCouponDiscount(PriceBreakdown &$breakdown, string $couponCode, Carbon $date): void
+        private function applyCouponDiscount(PriceBreakdown &$breakdown, string $couponCode, Carbon $date): void
     {
-       $coupon = Coupon::where('code', $couponCode)->where('active', true)->first();
-        if (!$coupon) return;
-        
-        // This method would contain the full validation and calculation logic for coupons
-        $discountAmount = 0.0;
-        if ($coupon->discount_type === 'buy_x_get_y_free') {
-            $discountAmount = $this->calculateBogoDiscount($breakdown->lineItems, $coupon->effects);
+        \Log::info("Attempting to apply coupon: {$couponCode}");
+
+        $coupon = Coupon::where('code', $couponCode)->where('active', true)->first();
+
+        if (!$coupon) {
+            \Log::warning("Coupon validation failed: Coupon code '{$couponCode}' not found or is inactive.");
+            return;
+        }
+
+        // --- STEP 1: Full Coupon Validation ---
+        $conditions = $coupon->conditions ?? [];
+
+        // Check usage limits
+        if (isset($coupon->max_uses) && $coupon->used_count >= $coupon->max_uses) {
+            \Log::warning("Coupon validation failed for '{$coupon->code}': Exceeded max uses.");
+            return;
+        }
+
+        // Check date validity
+        if (isset($conditions['valid_from']) && $date->isBefore(Carbon::parse($conditions['valid_from']))) {
+            \Log::warning("Coupon validation failed for '{$coupon->code}': Coupon is not yet active.");
+            return;
+        }
+        if (isset($conditions['valid_to']) && $date->isAfter(Carbon::parse($conditions['valid_to']))) {
+            \Log::warning("Coupon validation failed for '{$coupon->code}': Coupon has expired.");
+            return;
         }
         
+        // Check minimum amount
+        if (isset($conditions['min_amount']) && $breakdown->adjustedSubtotal < $conditions['min_amount']) {
+            \Log::warning("Coupon validation failed for '{$coupon->code}': Minimum purchase amount not met.");
+            return;
+        }
+
+        \Log::info("Coupon '{$coupon->code}' passed all validation checks.");
+
+        // --- STEP 2: Calculate Discount Amount Based on Type ---
+        $discountAmount = 0.0;
+        $effects = $coupon->effects ?? [];
+
+        switch ($coupon->discount_type) {
+            case 'percentage':
+                $discountValue = $coupon->discount_value ?? 0;
+                $potentialDiscount = ($breakdown->adjustedSubtotal * $discountValue) / 100;
+                
+                // Check if there is a maximum discount amount cap
+                $maxDiscountAmount = $effects['max_discount_amount'] ?? null;
+                if ($maxDiscountAmount !== null && $potentialDiscount > $maxDiscountAmount) {
+                    $discountAmount = $maxDiscountAmount;
+                } else {
+                    $discountAmount = $potentialDiscount;
+                }
+                \Log::info("Calculated percentage discount: {$discountAmount}");
+                break;
+
+            case 'fixed':
+                $discountAmount = $coupon->discount_value ?? 0;
+                \Log::info("Calculated fixed discount: {$discountAmount}");
+                break;
+
+            case 'buy_x_get_y_free':
+                $discountAmount = $this->calculateBogoDiscount($breakdown->lineItems, $effects);
+                \Log::info("Calculated BOGO discount: {$discountAmount}");
+                break;
+            
+            default:
+                \Log::warning("Coupon '{$coupon->code}' has an unknown discount type: {$coupon->discount_type}");
+                break;
+        }
+        
+        // --- STEP 3: Apply the Discount ---
         if ($discountAmount > 0) {
              $breakdown->appliedDiscounts->push([
                 'name' => "Coupon: {$coupon->code}",
                 'amount' => round($discountAmount, 2),
             ]);
+            \Log::info("Successfully applied discount of {$discountAmount} for coupon '{$coupon->code}'.");
+        } else {
+            \Log::info("Coupon '{$coupon->code}' resulted in a zero discount amount.");
         }
     }
 

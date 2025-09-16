@@ -4,50 +4,57 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Resources\UserResource;
-use App\Models\User;
+use App\Services\UserManager; // Import the new service
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class UserController extends Controller
 {
+    use AuthorizesRequests;
+
+    protected UserManager $userManager;
+
     /**
-     * Store a new user (staff member) for the current tenant.
+     * Inject the UserManager service into the controller.
+     */
+    public function __construct(UserManager $userManager)
+    {
+        $this->userManager = $userManager;
+    }
+
+    /**
+     * Display a paginated listing of the tenant's users.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        // Authorization is handled by the 'can:manage-team' middleware in the routes file.
+        $requestingUser = $request->user();
+        
+        // Delegate the logic to the UserManager service.
+        $users = $this->userManager->getUsersForTenant(
+            $requestingUser->tenant, 
+            $requestingUser
+        );
+
+        return UserResource::collection($users)->response();
+    }
+
+    /**
+     * Store a new user (invite them to the tenant).
      */
     public function store(StoreUserRequest $request): JsonResponse
     {
-        // Authorization using the Gate we just defined.
-        // This will throw a 403 Forbidden exception if the user is not an 'owner'.
-        $this->authorize('manage-team');
-        
-        // Get the currently authenticated user (the owner) to access their tenant_id.
+        // Authorization is handled by the 'can:manage-team' middleware in the routes file.
         $owner = $request->user();
-        $validated = $request->validated();
         
-        $user = DB::transaction(function () use ($owner, $validated) {
-            // --- Step 1: Create the new User record ---
-            $newUser = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'role' => $validated['role'],
-                'tenant_id' => $owner->tenant_id, // Assign to the owner's tenant.
-                // Set a highly secure, random, and temporary password.
-                // This password is never used by anyone.
-                'password' => Hash::make(Str::random(40)),
-            ]);
+        // Delegate the core logic to the UserManager service.
+        $newUser = $this->userManager->inviteUser(
+            $owner->tenant, 
+            $request->validated()
+        );
 
-            // --- Step 2: Trigger the Password Reset Flow ---
-            // This generates a secure token and sends the user the
-            // standard "Reset Password Notification" email.
-            $token = Password::broker()->createToken($newUser);
-            $newUser->sendPasswordResetNotification($token);
-            
-            return $newUser;
-        });
-
-        // Return a response with the newly created user's data.
-        return (new UserResource($user))->response()->setStatusCode(201);
+        // Return a 201 Created response with the new user's data.
+        return (new UserResource($newUser))->response()->setStatusCode(201);
     }
 }

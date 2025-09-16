@@ -36,7 +36,7 @@ class BookingIntentController extends Controller
             'add_ons.*.add_on_id' => 'required|integer|exists:addons,id',
             'add_ons.*.quantity' => 'required|integer|min:0',
             'coupon_code' => 'nullable|string',
-            'session_id' => 'sometimes|string|exists:booking_intents,session_id',
+            'session_id' => 'required|string|exists:booking_intents,session_id',
         ]);
         
         // Run the pricing engine first to get the calculated line items.
@@ -142,4 +142,66 @@ class BookingIntentController extends Controller
             return response()->json(['error' => 'An error occurred. Please try again later.', 'details' => $e->getMessage()], 500);
         }
     }
+
+     /**
+     * --- NEW METHOD ---
+     * Starts a new booking session or retrieves an existing one.
+     * This is the very first API call the widget makes.
+     */
+    public function startOrResume(Request $request): JsonResponse
+    {
+         \Log::info('session_id: ' . ($validated['session_id'] ?? 'none'));
+        $validated = $request->validate([
+            'service_uuid' => 'required|uuid|exists:bookable_services,uuid',
+            'session_id' => 'nullable|string|exists:booking_intents,session_id',
+        ]);
+        \Log::info('session_id: ' . ($validated['session_id'] ?? 'none'));
+
+        // If a valid, active session ID was provided, "touch" it to refresh its expiration and return it.
+        if (isset($validated['session_id'])) {
+            $intent = BookingIntent::where('session_id', $validated['session_id'])
+                                   ->where('status', 'active')
+                                   ->where('expires_at', '>', now())
+                                   ->first();
+            if ($intent) {
+                $intent->update(['expires_at' => now()->addMinutes(30)]); // Refresh expiry
+                return response()->json(['session_id' => $intent->session_id]);
+            }
+        }
+        
+        // If no valid session was found, create a new one.
+        $service = BookableService::where('uuid', $validated['service_uuid'])->firstOrFail();
+
+        $intent = BookingIntent::create([
+            'session_id' => 'sess_' . Str::random(24),
+            'tenant_id' => $service->tenant_id,
+            'bookable_service_id' => $service->id,
+            'status' => 'active',
+            'expires_at' => now()->addMinutes(30),
+        ]);
+
+        return response()->json(['session_id' => $intent->session_id], 201);
+    }
+
+    
+    /**
+     * --- NEW METHOD ---
+     * Gets the current state of a booking intent.
+     * The iframe app calls this on load to restore the user's progress.
+     */
+    public function show(BookingIntent $intent): JsonResponse
+    {
+        \Log::info('Showing booking intent: ' . $intent->session_id);
+
+        // Route-model binding finds the intent by its session_id.
+        if ($intent->status !== 'active' || ($intent->expires_at && $intent->expires_at->isPast())) {
+            return response()->json(['message' => 'This booking session has expired.'], 410); // 410 Gone
+        }
+        
+        // Eager-load the necessary data for the frontend widget.
+         $intent->load('bookableService.tenant', 'bookableService.ticketTiers', 'bookableService.addons');
+
+        return response()->json($intent);
+    }
+
 }
