@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Customers;
 use App\Models\BookableService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BookingIntent extends Model
 {

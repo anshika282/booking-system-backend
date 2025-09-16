@@ -5,6 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Services\AuthService;
 use App\Http\Resources\UserResource;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
@@ -75,5 +80,51 @@ class AuthController extends Controller
          $user->load('tenant');
         // Return the user data formatted by our API Resource
         return new UserResource($user);
+    }
+/**
+     * Resets the user's password and logs them in by returning a JWT.
+     */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 422);
+        }
+
+        $userToLogin = null; // Variable to hold the user instance
+
+        $status = Password::broker()->reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) use (&$userToLogin) {
+                $user->forceFill([
+                    'password' => Hash::make($password)
+                ])->setRememberToken(Str::random(60));
+
+                $user->save();
+                $user->markEmailAsVerified();
+                event(new PasswordReset($user));
+                
+                // Assign the user to our variable so we can use it outside the closure
+                $userToLogin = $user; 
+            }
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return response()->json(['message' => __($status)], 400);
+        }
+
+        // --- NEW: Generate and return a JWT for the user ---
+        if (!$userToLogin) {
+            return response()->json(['message' => 'Could not log in user after password reset.'], 500);
+        }
+        
+        // Use the injected AuthService to generate the token response
+        $token = JWTAuth::fromUser($userToLogin);
+        return $this->authService->respondWithToken($token);
     }
 }

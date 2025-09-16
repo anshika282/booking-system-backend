@@ -13,6 +13,7 @@ use App\Http\Controllers\PricingRuleController;
 use App\Http\Controllers\BookingIntentController;
 use App\Http\Controllers\DailyManifestController;
 use App\Http\Controllers\OperatingHourController;
+use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\BookableServiceController;
 
 Route::prefix('v1')->group(function () {
@@ -21,6 +22,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::post('/refresh', [AuthController::class, 'refresh']);
+        Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     });
 
     Route::middleware(['auth:api', 'tenant.check'])->group(function () {
@@ -60,10 +62,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/', [PricingRuleController::class, 'index']);  
             Route::post('/', [PricingRuleController::class, 'store']);
              Route::get('/{rule}', [PricingRuleController::class, 'show']);
-            // Route::put('/{rule}', [PricingRuleController::class, 'update']);
+             //Route::put('/{rule}', [PricingRuleController::class, 'update']);
+             Route::patch('/reorder', [PricingRuleController::class, 'reorder']);
             Route::patch('/{rule}', [PricingRuleController::class, 'patch']);
             Route::delete('/{rule}', [PricingRuleController::class, 'destroy']);
-             Route::patch('/reorder', [PricingRuleController::class, 'reorder']);
+             
         });
 
         Route::prefix('services/{service}/coupons')->group(function () {
@@ -84,7 +87,6 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{addOn}', [AddOnController::class, 'destroy']);
         });
 
-        Route::post('/users', [UserController::class, 'store']);
         
         Route::get('/bookings', [BookingController::class, 'index']);
         Route::get('/bookings/{booking:booking_reference}', [BookingController::class, 'show']);
@@ -92,10 +94,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/customers', [CustomerController::class, 'index']);
         Route::get('/customers/{customer}', [CustomerController::class, 'show']);
 
+        Route::get('/users', [UserController::class, 'index'])->middleware('can:manage-team');
+        Route::post('/users', [UserController::class, 'store'])->middleware('can:manage-team');
+
         // --- ADD YOUR FUTURE TENANT-SCOPED ROUTES HERE --
     });
     Route::prefix('locations')->group(function () {
-           Route::get('/', [LocationController::class, 'index']);
+           Route::get('/', [LocationController::class, 'index']);   
             Route::post('/', [LocationController::class, 'store']);
             Route::get('/{location}', [LocationController::class, 'show']);
             Route::put('/{location}', [LocationController::class, 'update']);
@@ -110,11 +115,26 @@ Route::prefix('v1')->group(function () {
          * Get the public details of a service for a specific tenant,
          * identified by the tenant's UUID.
          */
-        Route::get('/tenants/{tenant:uuid}/services/{service}', [PublicBookingController::class, 'showService'])
-            ->scopeBindings(); 
 
-        Route::post('/services/{service}/calculate-price', [BookingIntentController::class, 'calculateAndPersist']);
-        Route::get('/services/{service}/daily-manifest', [DailyManifestController::class, 'show']);
+        Route::prefix('tenants/{tenant:uuid}')->scopeBindings()->group(function () {
+            /**
+             * Get the public details of a service for a specific tenant.
+             */
+            Route::get('/services/{service:uuid}', [PublicBookingController::class, 'showService']);
+
+            /**
+             * Get the daily availability and pricing for a specific service.
+             * This route now correctly inherits the tenant scope.
+             */
+            Route::get('/services/{service:uuid}/daily-manifest', [DailyManifestController::class, 'show']);
+            // --- NEW BOOKING SESSION ROUTES ---
+        });
+ 
+        Route::post('/booking-intents/start', [BookingIntentController::class, 'startOrResume']);
+        Route::get('/booking-intents/{intent:session_id}', [BookingIntentController::class, 'show']);
+
+        Route::post('/services/{service:uuid}/calculate-price', [BookingIntentController::class, 'calculateAndPersist']);
+        // Route::get('/services/{service:uuid}/daily-manifest', [DailyManifestController::class, 'show']);
 
         Route::put('/booking-intents/{intent:session_id}/visitor-info', [BookingIntentController::class, 'storeVisitorInfo']);
 

@@ -45,7 +45,18 @@ class PatchPricingRuleRequest extends FormRequest
             // --- Price Modification Validation ---
             'price_modification' => 'sometimes|required|array',
             'price_modification.type' => 'sometimes|required|string', // And other rules...
-
+            // But if 'price_modification' IS present, then 'type' is required.
+            'price_modification.type' => ['required_with:price_modification', 'string', Rule::in(['set_fixed_price', 'total_amount_discount'])],
+         
+            // Rules for 'total_amount_discount'
+            'price_modification.calculation_mode' => ['required_if:price_modification.type,total_amount_discount', Rule::in(['percentage', 'fixed'])],
+            'price_modification.amount' => [
+                'required_if:price_modification.type,total_amount_discount',
+                'numeric',
+                'min:0',
+                // This rule will only apply if the calculation_mode is 'percentage'.
+                Rule::when($this->input('price_modification.calculation_mode') === 'percentage', ['max:100']),
+            ],
             // == Rules for 'set_fixed_price' type ==
             'price_modification.tiers' => ['sometimes', 'array'],
 
