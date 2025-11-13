@@ -7,6 +7,7 @@ use App\Models\Coupon;
 use App\Models\Tenant;
 use App\Models\TicketTier;
 use App\Models\PricingRule;
+use Illuminate\Support\Str;
 use App\Models\OperatingHour;
 use App\Models\AvailabilitySlot;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,7 @@ class BookableService extends Model
      protected $fillable = [
         'tenant_id', 'name', 'description', 'duration_minutes', 'slot_consumption_model',
         'slot_selection_mode', 'search_buffer_minutes', 'booking_window_min_days','default_capacity',
+        'login_flow_preference',
         'booking_window_max_days', 'status',
     ];
 

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Booking;
 use App\Models\BookingIntent;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customers extends Model
 {
@@ -20,11 +21,11 @@ class Customers extends Model
 
     public function bookings(): HasMany
     {
-        return $this->hasMany(Booking::class);
+        return $this->hasMany(Booking::class ,'customer_id');
     }
 
     public function bookingIntents(): HasMany { 
-        return $this->hasMany(BookingIntent::class); 
+        return $this->hasMany(BookingIntent::class , 'customer_id'); 
     }
 
 }

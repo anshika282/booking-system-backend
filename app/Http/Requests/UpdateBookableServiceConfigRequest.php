@@ -42,6 +42,7 @@ class UpdateBookableServiceConfigRequest extends FormRequest
                 'required',
                 'integer',
             ],
+             'login_flow_preference' => ['sometimes', 'required', Rule::in(['login_first', 'login_at_checkout', 'guest_only'])],
         ];
 
         // This is a dynamic rule to adjust the min value for booking_window_min_days

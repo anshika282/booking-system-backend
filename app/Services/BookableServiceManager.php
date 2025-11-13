@@ -72,8 +72,9 @@ class BookableServiceManager
                 'booking_window_min_days' => $data['booking_window_min_days'],
                 'booking_window_max_days' => $data['booking_window_max_days'],
                 'status' => 'draft', // Services are created as drafts by default.
+                'login_flow_preference' => $data['login_flow_preference'],
                 'default_capacity' => $data['default_capacity'],
-            ]);
+            ]); 
             
             // Associate the polymorphic relationship and save.
             $bookableService->serviceable()->associate($serviceable);

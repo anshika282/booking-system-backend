@@ -8,6 +8,7 @@ use App\Http\Controllers\CouponController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\PublicAuthController;
 use App\Http\Controllers\TicketTierController;
 use App\Http\Controllers\PricingRuleController;
 use App\Http\Controllers\BookingIntentController;
@@ -140,6 +141,9 @@ Route::prefix('v1')->group(function () {
 
         // Step 2: Finalize the booking after payment confirmation.
         Route::post('/bookings/from-intent', [BookingController::class, 'storeFromIntent']);
+
+        Route::post('/auth/send-otp', [PublicAuthController::class, 'sendOtp']);
+        Route::post('/auth/verify-otp', [PublicAuthController::class, 'verifyOtp']);
 
     });
 });

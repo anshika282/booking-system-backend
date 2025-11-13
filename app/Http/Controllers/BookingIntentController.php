@@ -124,15 +124,24 @@ class BookingIntentController extends Controller
     public function storeVisitorInfo(StoreVisitorInfoRequest $request, BookingIntent $intent): JsonResponse
     {
         try {
-                // Find or create the customer record
-                $customer = $this->customerManager->findOrCreateCustomer($request->validated());
+            $validatedData = $request->validated();
+            $isGuest = $validatedData['is_guest'];
+            
+            $intentData = $intent->intent_data ?? [];
+            $intentData['visitor_info'] = $validatedData;
+            $intent->intent_data = $intentData;
 
-                // Link the customer to the intent
+            // If the user is NOT a guest, find or create their permanent customer record
+            // and associate it with the intent.
+            if (!$isGuest) {
+                $tenant = $intent->bookableService->tenant;
+                $customer = $this->customerManager->findOrCreateCustomer($validatedData, $tenant);
                 $intent->customer_id = $customer->id;
-                $intent->save();
+            }
 
-                // In a real app, you would generate and return a payment intent secret here.
-                return response()->json(['message' => 'Customer details saved successfully.']);
+            $intent->save();
+
+            return response()->json(['message' => 'Visitor details saved successfully.']);
         
         } catch (ModelNotFoundException $e) {
             // Handle case where tenant or intent is not found

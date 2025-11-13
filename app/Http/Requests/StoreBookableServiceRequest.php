@@ -54,7 +54,7 @@ class StoreBookableServiceRequest extends FormRequest
                                 // This ensures the provided location_id exists in the locations table AND belongs to the current tenant.
                                 Rule::exists('locations', 'id')->where('tenant_id', $tenantId),
                                 ],
-
+            'login_flow_preference' => ['required', Rule::in(['login_first', 'login_at_checkout', 'guest_only'])],
             // Fields for 'appointment'
             'buffer_time_minutes' => 'required_if:service_type,appointment|integer|min:0',
             'requires_provider' => 'required_if:service_type,appointment|boolean',

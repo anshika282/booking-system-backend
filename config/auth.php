@@ -46,6 +46,12 @@ return [
             'provider' => 'users',
             'hash' => false,  // No need for hashing with JWT
         ],
+        'customers' => [
+            'driver' => 'token', // Use Laravel's simple token driver
+            'provider' => 'customers',
+            'hash' => false,
+        ],
+
     ],
 
     /*
@@ -75,6 +81,10 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+        'customers' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Customers::class,
+        ],
     ],
 
     /*

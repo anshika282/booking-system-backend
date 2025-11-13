@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
+use App\Models\Customers;
 use App\Services\TenantManager;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
@@ -22,7 +22,7 @@ class CustomerQueryService
     {
         $tenantId = $this->tenantManager->getCurrentTenantId();
 
-        $query = Customer::query()
+        $query = Customers::query()
             // This is the key: only show customers who have at least one booking
             // associated with the current tenant.
             ->whereHas('bookings', fn($q) => $q->where('tenant_id', $tenantId));
