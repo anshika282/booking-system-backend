@@ -18,7 +18,7 @@ class QueueSlotGeneration extends Command
         $this->info('Checking for services that need slot generation...');
 
         // Find all active services whose booking window is not yet full.
-        // This is an efficient query that finds the last slot date for each service
+        // This is an efficient query that finds the last slot date for each service    
         // and compares it to their required horizon.
         $servicesToUpdate = DB::table('bookable_services as bs')
             ->select('bs.id', 'bs.booking_window_max_days', DB::raw('MAX(avs.start_time) as last_slot_date'))

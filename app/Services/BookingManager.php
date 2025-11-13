@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Booking;
+use App\Models\Customers;
 use Illuminate\Support\Str;
 use App\Models\BookingIntent;
 use App\Services\TenantManager;
@@ -50,12 +51,32 @@ class BookingManager
             // If the payment fails, it will throw an exception and the transaction will be rolled back.
             $this->processPayment($intent->total_amount, $paymentToken);
 
+            // --- NEW LOGIC for handling Guest vs. Registered Customer ---
+            $visitorInfo = $intent->intent_data['visitor_info'] ?? null;
+            $customerId = $intent->customer_id; // This will be set for logged-in users
+
+            if (empty($customerId)) {
+            if (isset($visitorInfo['is_guest']) && $visitorInfo['is_guest'] === true) {
+                // GUEST CHECKOUT
+                $guestCustomer = Customers::where('is_placeholder', true)->firstOrFail();
+                $customerId = $guestCustomer->id;
+            } elseif ($visitorInfo) {
+                // NEW CUSTOMER REGISTRATION AT CHECKOUT
+                // We have the verified name, email, and phone, so we create the customer now.
+                $tenant = $intent->bookableService->tenant; // Get the tenant from the service
+                $customer = $this->customerManager->findOrCreateCustomer($visitorInfo, $tenant);
+                $customerId = $customer->id;
+            } else {
+                throw new \Exception('Cannot finalize booking: No customer information found.');
+            }
+        }
+
             // --- Step 3: Create the Permanent Booking Record ---
             $booking = Booking::create([
                 'booking_reference' => 'BK-' . strtoupper(Str::random(10)),
                 'tenant_id' => $intent->tenant_id,
                 'bookable_service_id' => $intent->bookable_service_id,
-                'customer_id' => $intent->customer_id,
+                'customer_id' => $customerId,
                 'total_amount' => $intent->total_amount,
                 'status' => 'confirmed',
                 // This is the permanent, auditable record of the transaction.

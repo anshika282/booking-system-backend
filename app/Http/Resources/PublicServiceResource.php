@@ -30,7 +30,7 @@ class PublicServiceResource extends JsonResource
             'uuid' => $this->uuid,
             'name' => $this->name,
             'description' => $this->description,
-
+            'login_flow_preference' => $this->login_flow_preference,
             // Include details from the polymorphic relationship (e.g., venue_name)
             'details' => $this->whenLoaded('serviceable', function () {
                 // We can be selective about which details to show.

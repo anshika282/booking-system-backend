@@ -27,6 +27,7 @@ class BookableServicesResource extends JsonResource
                 'max_days_advance' => $this->booking_window_max_days,
             ],
             'default_capacity' => $this->default_capacity,
+            'login_flow_preference' => $this->login_flow_preference,
             // Conditionally merge the specific service type details
             // This uses the power of polymorphism to return the correct details.
             'details' => $this->whenLoaded('serviceable'),
