@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Location;
 use Illuminate\Support\Str;
 use App\Models\BookableService;
+use App\Models\TenantPaymentConfig;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,6 +29,16 @@ class Tenant extends Model
     public function locations(): HasMany
     {
         return $this->hasMany(Location::class);
+    }
+
+    /**
+     * Relationship: One tenant can have many payment configurations.
+     * This is the relationship linking the tenant to their payment options.
+     */
+    public function paymentConfigs(): HasMany
+    {
+        // Eloquent correctly assumes the foreign key is 'tenant_id' on the related model.
+        return $this->hasMany(TenantPaymentConfig::class);
     }
 
     /**
