@@ -14,6 +14,7 @@ use App\Http\Controllers\PricingRuleController;
 use App\Http\Controllers\BookingIntentController;
 use App\Http\Controllers\DailyManifestController;
 use App\Http\Controllers\OperatingHourController;
+use App\Http\Controllers\PaymentConfigController;
 use App\Http\Controllers\PublicBookingController;
 use App\Http\Controllers\BookableServiceController;
 
@@ -98,6 +99,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/users', [UserController::class, 'index'])->middleware('can:manage-team');
         Route::post('/users', [UserController::class, 'store'])->middleware('can:manage-team');
 
+        Route::group(['prefix' => 'payment', 'middleware' => 'can:manage-team'], function () { // Assuming manage-team is owner-only
+            Route::get('/config', [PaymentConfigController::class, 'show']);
+            Route::put('/config', [PaymentConfigController::class, 'update']);
+        });
+
         // --- ADD YOUR FUTURE TENANT-SCOPED ROUTES HERE --
     });
     Route::prefix('locations')->group(function () {
@@ -139,11 +145,29 @@ Route::prefix('v1')->group(function () {
 
         Route::put('/booking-intents/{intent:session_id}/visitor-info', [BookingIntentController::class, 'storeVisitorInfo']);
 
-        // Step 2: Finalize the booking after payment confirmation.
+        // Step 1: Initiate Payment from Frontend (NEW DEDICATED ROUTE)
+        Route::post('/bookings/initiate-payment', [BookingController::class, 'initiatePayment']);
+        // // Step 2: Finalize the booking after payment confirmation.
         Route::post('/bookings/from-intent', [BookingController::class, 'storeFromIntent']);
 
         Route::post('/auth/send-otp', [PublicAuthController::class, 'sendOtp']);
         Route::post('/auth/verify-otp', [PublicAuthController::class, 'verifyOtp']);
+
+        Route::post('/bookings/verify-payment-status', [BookingController::class, 'verifyPaymentStatus']);
+
+         // Step 1: Initiate Payment from Frontend
+        // The frontend calls this endpoint to get the redirect URL.
+        // Step 2: Payment Gateway Redirect/Webhook Verification
+        Route::group(['prefix' => 'payment'], function () {   
+            // This is the secure verification/redirect URL (PhonePe only redirects the browser here)
+            Route::any('phonepe/verify', [BookingController::class, 'handlePhonePeCallback'])
+                ->name('public.payment.verify.phonepe');
+
+            // This is the secure, server-to-server webhook endpoint
+            Route::post('phonepe/webhook', [BookingController::class, 'handlePhonePeWebhook'])
+                ->name('public.payment.webhook.phonepe');
+
+        });
 
     });
 });

@@ -8,15 +8,20 @@ use Illuminate\Support\Str;
 use App\Models\BookingIntent;
 use App\Services\TenantManager;
 use App\Models\AvailabilitySlot;
+use App\Services\PaymentService;
 use Illuminate\Support\Facades\DB;
+use App\Services\BookingPriceCalculator;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 class BookingManager
 {
+    protected PaymentService $paymentService;
+    protected TenantManager $tenantManager;
     // We'll inject the TenantManager to get the current tenant context.
-    public function __construct(TenantManager $tenantManager)
+    public function __construct(TenantManager $tenantManager, PaymentService $paymentService)
     {
         $this->tenantManager = $tenantManager;
+        $this->paymentService = $paymentService;
     }
     /**
      * Finalizes a booking from an intent, processes payment, and confirms the reservation.
@@ -34,7 +39,47 @@ class BookingManager
             if ($intent->status !== 'active') {
                 throw new \Exception('This booking session has expired or is already completed.');
             }
-            // --- Step 1: Lock and Verify Inventory ---
+
+             // --- SECURITY STEP 1: RE-CALCULATE AUTHORITATIVE PRICE ---
+            // This ensures no client-side tampering or late price rule updates are missed.
+            $priceCalculator = app(BookingPriceCalculator::class);
+            
+            $selections = [
+                'tickets' => $intent->intent_data['tickets'],
+                'add_ons' => $intent->intent_data['add_ons'],
+                'coupon_code' => $intent->intent_data['coupon_code'] ?? null,
+            ];
+            
+            $finalBreakdown = $priceCalculator->calculate(
+                $intent->bookableService, 
+                $intent->intent_data['date'], 
+                $selections
+            );
+            
+            \Log::info('Price breakdown for booking intent', ['session_id' => $intent->session_id, 'breakdown' => $finalBreakdown]);
+            $authoritativeTotal = $finalBreakdown->finalTotal;
+
+            // --- SECURITY STEP 2: AUDIT PRICE CHECK (CRITICAL) ---
+            // Check that the amount paid by the user (stored in the intent total_amount)
+            // is not significantly different from the authoritative total.
+            // A tolerance (e.g., 0.01) is used for floating point safety.
+            if (abs($authoritativeTotal - $intent->total_amount) > 0.01) {
+                // LOG THIS AS A HIGH-RISK FRAUD ATTEMPT/CRITICAL BUG
+                \Log::critical('FRAUD/PRICE-TAMPERING DETECTED', [
+                    'session_id' => $intent->session_id,
+                    'paid_amount' => $intent->total_amount,
+                    'correct_amount' => $authoritativeTotal,
+                ]);
+                // Since payment already passed, this means a serious data flaw.
+                // It's safer to *fail the booking* but retain the payment.
+                // Throwing an exception prevents finalization but retains the transaction.
+                throw new \Exception('Price discrepancy detected. Booking aborted.');
+            }
+            
+            
+            // --- Step 3: Update Intent/Booking with authoritative, re-validated data ---
+            $intent->total_amount = $authoritativeTotal; // Update with the final price
+            // --- Step 4: Lock and Verify Inventory ---
             $slot = AvailabilitySlot::where('id', $intent->intent_data['slot_id'])
                                     ->lockForUpdate() // CRITICAL: Prevents race conditions
                                     ->firstOrFail();
@@ -188,5 +233,24 @@ class BookingManager
         $query->orderBy('created_at', 'desc');
 
         return $query->paginate($perPage);
+    }
+
+    /**
+     * Initiates the payment process and returns the payment gateway URL.
+     * 
+     * @param BookingIntent $intent The intent to process.
+     * @return string The redirect URL to the payment gateway.
+     */
+    public function initiatePayment(BookingIntent $intent): string
+    {
+        // 1. Final checks before payment: amount, visitor info, etc.
+        if ($intent->total_amount <= 0) {
+            // For a free booking, bypass the gateway
+            // TODO: Call finalizeBookingFromIntent directly
+            throw new \Exception("Cannot initiate payment for zero amount.");
+        }
+        
+        // 2. Delegate to the PaymentService
+        return $this->paymentService->initiatePayment($intent);
     }
 }
