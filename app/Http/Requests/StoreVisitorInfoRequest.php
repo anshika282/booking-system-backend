@@ -47,7 +47,7 @@ class StoreVisitorInfoRequest extends FormRequest
             ],
             'address1' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
-            'country' => 'nullable|string|max:100',
+            'country' => 'nullable|string|max:2',
             'postalCode' => 'nullable|string|max:20',
             'is_guest' => 'required|boolean',
             // Add other customer fields as needed

@@ -9,6 +9,7 @@ use App\Models\BookingIntent;
 use App\Services\TenantManager;
 use App\Models\AvailabilitySlot;
 use App\Services\PaymentService;
+use App\Services\CustomerManager;
 use Illuminate\Support\Facades\DB;
 use App\Services\BookingPriceCalculator;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -17,11 +18,14 @@ class BookingManager
 {
     protected PaymentService $paymentService;
     protected TenantManager $tenantManager;
+    protected CustomerManager $customerManager; // Add this property
+
     // We'll inject the TenantManager to get the current tenant context.
-    public function __construct(TenantManager $tenantManager, PaymentService $paymentService)
+    public function __construct(TenantManager $tenantManager, PaymentService $paymentService, CustomerManager $customerManager)
     {
         $this->tenantManager = $tenantManager;
         $this->paymentService = $paymentService;
+        $this->customerManager = $customerManager;
     }
     /**
      * Finalizes a booking from an intent, processes payment, and confirms the reservation.
@@ -40,15 +44,37 @@ class BookingManager
                 throw new \Exception('This booking session has expired or is already completed.');
             }
 
+            
+            // The data stored in intent_data has a different structure than the data from the initial request.
+            // We must re-format it to match what the BookingPriceCalculator expects.
+            $intentData = $intent->intent_data;
+
+            // Re-format the 'tickets' array.
+            $reformattedTickets = collect($intentData['tickets'])->map(function ($ticket) {
+                return [
+                    'tier_id' => $ticket['ticket_tier_id'], // Use the correct key
+                    'quantity' => $ticket['quantity'],
+                ];
+            })->all();
+            
+            // Re-format the 'add_ons' array.
+            $reformattedAddOns = collect($intentData['add_ons'])->map(function ($addOn) {
+                 return [
+                    'add_on_id' => $addOn['add_on_id'],
+                    'quantity' => $addOn['quantity'],
+                ];
+            })->all();
+
+            
+            $selections = [
+                'tickets' => $reformattedTickets,
+                'add_ons' => $reformattedAddOns,
+                'coupon_code' => $intentData['coupon_code'] ?? null,
+            ];
+            
              // --- SECURITY STEP 1: RE-CALCULATE AUTHORITATIVE PRICE ---
             // This ensures no client-side tampering or late price rule updates are missed.
             $priceCalculator = app(BookingPriceCalculator::class);
-            
-            $selections = [
-                'tickets' => $intent->intent_data['tickets'],
-                'add_ons' => $intent->intent_data['add_ons'],
-                'coupon_code' => $intent->intent_data['coupon_code'] ?? null,
-            ];
             
             $finalBreakdown = $priceCalculator->calculate(
                 $intent->bookableService, 
@@ -56,14 +82,18 @@ class BookingManager
                 $selections
             );
             
-            \Log::info('Price breakdown for booking intent', ['session_id' => $intent->session_id, 'breakdown' => $finalBreakdown]);
+            // \Log::info('Price breakdown for booking intent', ['session_id' => $intent->session_id, 'breakdown' => $finalBreakdown]);
             $authoritativeTotal = $finalBreakdown->finalTotal;
-
+            // \Log::critical('FRAUD/PRICE-TAMPERING DETECTED', [
+            //         'session_id' => $intent->session_id,
+            //         'paid_amount' => $intent->total_amount,
+            //         'correct_amount' => $authoritativeTotal,
+            //     ]);
             // --- SECURITY STEP 2: AUDIT PRICE CHECK (CRITICAL) ---
             // Check that the amount paid by the user (stored in the intent total_amount)
             // is not significantly different from the authoritative total.
             // A tolerance (e.g., 0.01) is used for floating point safety.
-            if (abs($authoritativeTotal - $intent->total_amount) > 0.01) {
+            if (abs((float)$authoritativeTotal - (float)$intent->total_amount) > 0.01) {
                 // LOG THIS AS A HIGH-RISK FRAUD ATTEMPT/CRITICAL BUG
                 \Log::critical('FRAUD/PRICE-TAMPERING DETECTED', [
                     'session_id' => $intent->session_id,
