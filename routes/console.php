@@ -18,5 +18,3 @@ Schedule::command('app:queue-slot-generation')->dailyAt('01:00');
 // It keeps the database lean by removing old, useless data.
 Schedule::command('app:prune-slots --days=7')->dailyAt('02:00');
 
-// This is the command to clean up expired booking intents.
-Schedule::command('app:prune-intents')->everyFiveMinutes();

@@ -39,9 +39,14 @@ class BookingIntentController extends Controller
             'session_id' => 'required|string|exists:booking_intents,session_id',
         ]);
         
+        $intent = null;
         // Run the pricing engine first to get the calculated line items.
         $breakdown = $this->priceCalculator->calculate($service, $validated['date'], $validated);
 
+        if (!empty($validated['session_id'])) {
+            // If a session ID was provided, find that specific intent.
+            $intent = BookingIntent::where('session_id', $validated['session_id'])->first();
+        }
         // --- BUILD THE DETAILED SNAPSHOT ---
         
         // Snapshot the selected add-ons with their price at this moment.
@@ -51,7 +56,7 @@ class BookingIntentController extends Controller
             $addOnModels = $service->addons()->whereIn('id', $addOnIds)->get()->keyBy('id');
             foreach($validated['add_ons'] as $selection) {
                 $addOn = $addOnModels->get($selection['add_on_id']);
-                if ($addOn) {
+                if ($addOn && $selection['quantity'] > 0) {
                     $addOnsSnapshot[] = [
                         'add_on_id' => $addOn->id,
                         'name' => $addOn->name,
@@ -74,13 +79,9 @@ class BookingIntentController extends Controller
             'coupon_code' => $validated['coupon_code'] ?? null,
             // We can also store the applied discounts for display on the resume page
             'applied_discounts' => $breakdown->appliedDiscounts->toArray(),
+            'visitor_info' => $intent->intent_data['visitor_info'] ?? null,
         ];
 
-        $intent = null;
-        if (!empty($validated['session_id'])) {
-            // If a session ID was provided, find that specific intent.
-            $intent = BookingIntent::where('session_id', $validated['session_id'])->first();
-        }
         
          if ($intent) {
             // --- UPDATE EXISTING INTENT ---
@@ -109,11 +110,16 @@ class BookingIntentController extends Controller
                 'status' => 'active',
             ]);
         }
+        $couponError = null;
+        if (!empty($validated['coupon_code']) && $breakdown->appliedDiscounts->doesntContain('name', 'Coupon: ' . $validated['coupon_code'])) {
+            $couponError = 'The provided coupon code is invalid or does not apply to your cart.';
+        }
 
-        return response()->json([
+         return response()->json([
             'session_id' => $intent->session_id,
             'expires_at' => $intent->expires_at->toIso8601String(),
             'price_breakdown' => $breakdown->toArray(),
+            'coupon_error' => $couponError,
         ]);
     }
 
@@ -162,7 +168,7 @@ class BookingIntentController extends Controller
          \Log::info('session_id: ' . ($validated['session_id'] ?? 'none'));
         $validated = $request->validate([
             'service_uuid' => 'required|uuid|exists:bookable_services,uuid',
-            'session_id' => 'nullable|string|exists:booking_intents,session_id',
+            'session_id' => 'nullable|string',
         ]);
         \Log::info('session_id: ' . ($validated['session_id'] ?? 'none'));
 

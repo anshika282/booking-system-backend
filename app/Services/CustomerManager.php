@@ -19,7 +19,8 @@ class CustomerManager
     {
         // The unique key for a returning customer is their phone number scoped to the tenant.
         // firstOrCreate is an atomic and efficient way to handle this.
-         $customer = Customers::firstOrCreate(
+        \Log::info('Finding or creating customer with phone: ' . $customerData['country']);
+         $customer = Customers::updateOrCreate(
             [
                 'phone_number' => $customerData['phone'], 
             ],
@@ -30,11 +31,12 @@ class CustomerManager
                 'billing_address_line_1' => $customerData['address1'] ?? null,
                 'billing_city' => $customerData['city'] ?? null,
                 'billing_postal_code' => $customerData['postalCode'] ?? null,
-                'billing_state' => $customerData['country'] ?? null,
+                'billing_country' => $customerData['country'] ?? null,
                 'is_placeholder' => false,
                 'api_token' => hash('sha256', Str::random(60)),
             ]
         );
+        \Log::info('Customer found or created: ' . $customer);
 
         return $customer;
     }
